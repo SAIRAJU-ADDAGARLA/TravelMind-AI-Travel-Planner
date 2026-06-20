@@ -4,6 +4,8 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTripStore, DayItinerary } from "@/store/useTripStore";
 import { BudgetCard } from "@/components/ui/Cards";
+import JourneyTimeline from "@/components/ui/JourneyTimeline";
+import India3DMap from "@/components/ui/India3DMap";
 import {
   Calendar,
   DollarSign,
@@ -22,6 +24,7 @@ import {
   Utensils,
   Star,
   Hotel,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,9 +35,14 @@ export default function ItineraryViewerPage({
 }) {
   const resolvedParams = use(params);
   const router = useRouter();
-  const { trips, regenerateTrip, isGenerating } = useTripStore();
+  const { trips, regenerateTrip, isGenerating, reRankStopovers } = useTripStore();
   const [activeDay, setActiveDay] = useState(1);
   const [toastMsg, setToastMsg] = useState("");
+
+  const handleReRank = (preference: string) => {
+    reRankStopovers(trip?.id || "", preference);
+    triggerToast(`AI prioritizing and highlighting: ${preference}`);
+  };
 
   const trip = trips.find((t) => t.id === resolvedParams.id);
 
@@ -171,6 +179,88 @@ export default function ItineraryViewerPage({
             <span>{trip.travelStyle} Theme</span>
           </div>
         </div>
+      </div>
+
+      {/* Journey Between Destinations Flagship Section */}
+      <div className="p-6 rounded-3xl border border-border/40 bg-card space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/40 pb-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-accent animate-pulse" />
+              <span>Journey Between Destinations</span>
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">India&apos;s First AI Travel Platform That Discovers The Journey, Not Just The Destination.</p>
+          </div>
+        </div>
+
+        {/* Dynamic Map and Route Selector Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <India3DMap
+            source={trip.source || "Bhimavaram"}
+            destination={trip.destination}
+            stopovers={trip.stopovers || []}
+            activePreference={trip.attractionsPreferred}
+          />
+          
+          {/* Smart Stop Suggestions Prompt Card */}
+          <div className="p-5 rounded-3xl border border-border/40 bg-muted/20 flex flex-col justify-between">
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                <span>AI Smart Stop Suggestions</span>
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Our AI Journey Discovery Engine™ has identified attraction stopovers along your route. **What are you in the mood for?** Select a preference to re-rank and prioritize attractions.
+              </p>
+              
+              {/* Preference Buttons Grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: "Temples", emoji: "🛕" },
+                  { label: "Food", emoji: "🍛" },
+                  { label: "Nature", emoji: "🌿" },
+                  { label: "Adventure", emoji: "🏍️" },
+                  { label: "History", emoji: "🏰" },
+                  { label: "Photography", emoji: "📸" },
+                ].map((opt) => {
+                  const isSelected = trip.attractionsPreferred === opt.label;
+                  return (
+                    <button
+                      type="button"
+                      key={opt.label}
+                      onClick={() => handleReRank(opt.label)}
+                      className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border/80 bg-card hover:bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <span className="text-base">{opt.emoji}</span>
+                      <span>{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-border/40 pt-4 mt-4 text-[10px] text-muted-foreground leading-normal flex items-center gap-1">
+              <span className="font-bold text-foreground">AI Tip:</span>
+              <span>Re-ranking updates match percentages and highlights local nodes on the 3D map.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Route stopovers list */}
+        {trip.stopovers && trip.stopovers.length > 0 && (
+          <div className="pt-4">
+            <JourneyTimeline
+              source={trip.source || "Bhimavaram"}
+              destination={trip.destination}
+              mode={trip.mode || "Bike"}
+              stopovers={trip.stopovers}
+            />
+          </div>
+        )}
       </div>
 
       {/* Main layout grid: Map & Timeline vs Side Recs */}

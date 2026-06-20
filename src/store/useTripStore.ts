@@ -50,9 +50,27 @@ export interface CostBreakdown {
   transport: number;
 }
 
+export interface Stopover {
+  id: string;
+  name: string;
+  category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram";
+  description: string;
+  image: string;
+  distanceFromRoute: number;
+  recommendedVisitTime: string;
+  popularityScore: number;
+  aiScore: number;
+  coords: { x: number; y: number };
+}
+
 export interface Trip {
   id: string;
   destination: string;
+  source?: string;
+  mode?: "Bike" | "Car" | "Train" | "Flight" | "Bus";
+  language?: string;
+  attractionsPreferred?: string;
+  stopovers?: Stopover[];
   startDate: string;
   endDate: string;
   daysCount: number;
@@ -79,6 +97,10 @@ interface TripState {
   addTrip: (trip: Trip) => void;
   generateTrip: (params: {
     destination: string;
+    source?: string;
+    mode?: "Bike" | "Car" | "Train" | "Flight" | "Bus";
+    language?: string;
+    attractionsPreferred?: string;
     startDate: string;
     endDate: string;
     budget: string;
@@ -86,6 +108,7 @@ interface TripState {
     interests: string[];
   }) => Promise<string>;
   regenerateTrip: (id: string) => Promise<void>;
+  reRankStopovers: (tripId: string, preference: string) => void;
 }
 
 // Preseeded beautiful itineraries
@@ -340,9 +363,352 @@ const mockParisTrip: Trip = {
   ],
 };
 
+// Preseeded Indian Road Trip showing Journey Discovery Engine
+const mockIndiaTrip: Trip = {
+  id: "bhimavaram-hyderabad-roadtrip",
+  destination: "Hyderabad, Telangana",
+  source: "Bhimavaram, Andhra Pradesh",
+  mode: "Bike",
+  language: "Telugu",
+  attractionsPreferred: "Temples",
+  startDate: "2026-06-25",
+  endDate: "2026-06-27",
+  daysCount: 3,
+  budget: "Mid-range",
+  travelStyle: "Adventure",
+  interests: ["Spiritual Tourism", "Highway Dhabas", "Nature Trails"],
+  createdAt: "2026-06-05T12:00:00.000Z",
+  costs: {
+    hotels: 300,
+    food: 150,
+    activities: 120,
+    transport: 80,
+  },
+  weather: [
+    { day: "Thu", temp: 32, condition: "sunny" },
+    { day: "Fri", temp: 30, condition: "cloudy" },
+    { day: "Sat", temp: 31, condition: "sunny" },
+  ],
+  hotels: [
+    {
+      name: "Taj Krishna Hyderabad",
+      rating: 4.8,
+      pricePerNight: 180,
+      image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=400",
+    },
+    {
+      name: "Highway Residency Suryapet",
+      rating: 4.1,
+      pricePerNight: 50,
+      image: "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=400",
+    },
+  ],
+  restaurants: [
+    { name: "Suryapet Highway Durbar", cuisine: "Indian (Biryani & Tandoori)", rating: 4.5, priceLevel: "$$" },
+    { name: "Famous Tanuku Tiffin Stop", cuisine: "South Indian Breakfast", rating: 4.6, priceLevel: "$" },
+  ],
+  transports: [
+    { type: "bus", description: "Bike fuel and checkups", cost: 45 },
+    { type: "taxi", description: "Highway Toll Charges", cost: 10 },
+  ],
+  stopovers: [
+    {
+      id: "stop-tanuku",
+      name: "Tanuku Local Tiffin Stop",
+      category: "Food",
+      description: "Famous roadside spot serving piping hot idlis, crispy dosas, and authentic filter coffee.",
+      image: "https://images.unsplash.com/photo-1601050690597-df056fb4ce78?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 1.5,
+      recommendedVisitTime: "30 mins",
+      popularityScore: 88,
+      aiScore: 82,
+      coords: { x: 38, y: 56 },
+    },
+    {
+      id: "stop-kolleru",
+      name: "Kolleru Bird Sanctuary & Lake",
+      category: "Nature",
+      description: "One of India's largest freshwater lakes, hosting beautiful wetland viewing points and migratory birds.",
+      image: "https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 4.2,
+      recommendedVisitTime: "45 mins",
+      popularityScore: 79,
+      aiScore: 80,
+      coords: { x: 44, y: 54 },
+    },
+    {
+      id: "stop-durga",
+      name: "Vijayawada Kanaka Durga Hilltop Shrine",
+      category: "Spiritual",
+      description: "Majestic temple located on Indrakeeladri Hill along the banks of the Krishna River.",
+      image: "https://images.unsplash.com/photo-1608958416738-f9167df3c965?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 2.5,
+      recommendedVisitTime: "1 hour",
+      popularityScore: 97,
+      aiScore: 94,
+      coords: { x: 50, y: 58 },
+    },
+    {
+      id: "stop-fort",
+      name: "Kondapalli Fort & Toy Village",
+      category: "Heritage",
+      description: "Explore a historic 14th-century fort ruins and visit local craftsmen making famous wooden toys.",
+      image: "https://images.unsplash.com/photo-1599839617650-77a83d330541?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 7.0,
+      recommendedVisitTime: "1.5 hours",
+      popularityScore: 85,
+      aiScore: 84,
+      coords: { x: 56, y: 55 },
+    },
+    {
+      id: "stop-dhaba",
+      name: "Suryapet Seven Highway Dhaba",
+      category: "Food",
+      description: "Legendary highway stopover famous for spicy chicken biryani and butter roti.",
+      image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 0.2,
+      recommendedVisitTime: "40 mins",
+      popularityScore: 92,
+      aiScore: 86,
+      coords: { x: 66, y: 53 },
+    },
+    {
+      id: "stop-bhongir",
+      name: "Bhongir Fort & Rock Climb",
+      category: "Adventure",
+      description: "Scale a massive monolithic rock structure to view historical fort ruins and panoramic valleys.",
+      image: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 1.2,
+      recommendedVisitTime: "2 hours",
+      popularityScore: 90,
+      aiScore: 88,
+      coords: { x: 74, y: 50 },
+    },
+  ],
+  itinerary: [
+    {
+      day: 1,
+      date: "Jun 25",
+      morning: {
+        title: "Bhimavaram departure & Breakfast in Tanuku",
+        description: "Kickoff your bike roadtrip from Bhimavaram. Stop in Tanuku for early morning tiffins and coffee.",
+        time: "07:30 AM",
+        cost: 5,
+        location: "Tanuku",
+      },
+      afternoon: {
+        title: "Kolleru Lake Views & Ride to Vijayawada",
+        description: "Ride along scenic canals towards Eluru. Enjoy scenic bird watching views at Kolleru Lake.",
+        time: "11:30 AM",
+        cost: 2,
+        location: "Kolleru",
+      },
+      evening: {
+        title: "Kanaka Durga Temple Darshan",
+        description: "Arrive in Vijayawada and climb to the Indrakeeladri shrine for sunset views over the Krishna River.",
+        time: "05:30 PM",
+        cost: 10,
+        location: "Vijayawada",
+      },
+      night: {
+        title: "Stay at Highway Residency",
+        description: "Relax after the first leg of riding at a comfortable highway-side lodge.",
+        time: "08:30 PM",
+        cost: 50,
+        location: "Vijayawada",
+      },
+    },
+    {
+      day: 2,
+      date: "Jun 26",
+      morning: {
+        title: "Kondapalli Fort Exploration",
+        description: "Ride up the forest roads to Kondapalli Fort ruins. Shop for local wooden toys in the village below.",
+        time: "08:30 AM",
+        cost: 8,
+        location: "Kondapalli",
+      },
+      afternoon: {
+        title: "Highway ride towards Suryapet",
+        description: "Enjoy a smooth cruise on NH65. Stop at roadside tea stalls for coconut water and tea.",
+        time: "01:00 PM",
+        cost: 3,
+        location: "National Highway 65",
+      },
+      evening: {
+        title: "Seven Highway Dhaba Dinner",
+        description: "Stop at the Suryapet transit hub for a legendary spicy biryani and tandoori feast.",
+        time: "06:30 PM",
+        cost: 12,
+        location: "Suryapet",
+      },
+      night: {
+        title: "Relax at Suryapet pitstop",
+        description: "Stargazing at the highway lounge and chatting with other roadtrippers.",
+        time: "09:30 PM",
+        cost: 0,
+        location: "Suryapet",
+      },
+    },
+    {
+      day: 3,
+      date: "Jun 27",
+      morning: {
+        title: "Bhongir Fort Monolith Trek",
+        description: "Scale the unique egg-shaped monolith hill early before the heat. Take in the dramatic panoramic views.",
+        time: "06:30 AM",
+        cost: 4,
+        location: "Bhongir",
+      },
+      afternoon: {
+        title: "Ride into Hyderabad city lines",
+        description: "Complete the final stretch of the roadtrip entering Hyderabad via Uppal.",
+        time: "01:30 PM",
+        cost: 0,
+        location: "Hyderabad Gateway",
+      },
+      evening: {
+        title: "Charminar Photography & Irani Chai",
+        description: "Celebrate the trip completion with hot Irani Chai and Osmania biscuits near Charminar.",
+        time: "05:00 PM",
+        cost: 5,
+        location: "Old City, Hyderabad",
+      },
+      night: {
+        title: "Grand dinner at Jewel of Nizam",
+        description: "End the roadtrip journey with fine Mughlai dining overlooking the lake.",
+        time: "08:30 PM",
+        cost: 60,
+        location: "Gandipet, Hyderabad",
+      },
+    },
+  ],
+};
+
+const generateMockStopovers = (source: string, destination: string) => {
+  const src = source.toLowerCase();
+  const dest = destination.toLowerCase();
+
+  if (src.includes("bhimavaram") && dest.includes("hyderabad")) {
+    return [
+      {
+        id: "stop-tanuku",
+        name: "Tanuku Local Tiffin Stop",
+        category: "Food" as const,
+        description: "Famous roadside spot serving piping hot idlis, crispy dosas, and authentic filter coffee.",
+        image: "https://images.unsplash.com/photo-1601050690597-df056fb4ce78?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 1.5,
+        recommendedVisitTime: "30 mins",
+        popularityScore: 88,
+        aiScore: 82,
+        coords: { x: 38, y: 56 },
+      },
+      {
+        id: "stop-kolleru",
+        name: "Kolleru Bird Sanctuary & Lake",
+        category: "Nature" as const,
+        description: "One of India's largest freshwater lakes, hosting beautiful wetland viewing points and migratory birds.",
+        image: "https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 4.2,
+        recommendedVisitTime: "45 mins",
+        popularityScore: 79,
+        aiScore: 80,
+        coords: { x: 44, y: 54 },
+      },
+      {
+        id: "stop-durga",
+        name: "Vijayawada Kanaka Durga Hilltop Shrine",
+        category: "Spiritual" as const,
+        description: "Majestic temple located on Indrakeeladri Hill along the banks of the Krishna River.",
+        image: "https://images.unsplash.com/photo-1608958416738-f9167df3c965?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 2.5,
+        recommendedVisitTime: "1 hour",
+        popularityScore: 97,
+        aiScore: 94,
+        coords: { x: 50, y: 58 },
+      },
+      {
+        id: "stop-fort",
+        name: "Kondapalli Fort & Toy Village",
+        category: "Heritage" as const,
+        description: "Explore a historic 14th-century fort ruins and visit local craftsmen making famous wooden toys.",
+        image: "https://images.unsplash.com/photo-1599839617650-77a83d330541?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 7.0,
+        recommendedVisitTime: "1.5 hours",
+        popularityScore: 85,
+        aiScore: 84,
+        coords: { x: 56, y: 55 },
+      },
+      {
+        id: "stop-dhaba",
+        name: "Suryapet Seven Highway Dhaba",
+        category: "Food" as const,
+        description: "Legendary highway stopover famous for spicy chicken biryani and butter roti.",
+        image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 0.2,
+        recommendedVisitTime: "40 mins",
+        popularityScore: 92,
+        aiScore: 86,
+        coords: { x: 66, y: 53 },
+      },
+      {
+        id: "stop-bhongir",
+        name: "Bhongir Fort & Rock Climb",
+        category: "Adventure" as const,
+        description: "Scale a massive monolithic rock structure to view historical fort ruins and panoramic valleys.",
+        image: "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&q=80&w=400",
+        distanceFromRoute: 1.2,
+        recommendedVisitTime: "2 hours",
+        popularityScore: 90,
+        aiScore: 88,
+        coords: { x: 74, y: 50 },
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "gen-stop-1",
+      name: `Green Valley Viewpoint near ${source}`,
+      category: "Nature" as const,
+      description: "Scenic roadside overlook featuring pristine landscapes and photography platforms.",
+      image: "https://images.unsplash.com/photo-1501854140801-50d01698950b?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 3.5,
+      recommendedVisitTime: "20 mins",
+      popularityScore: 81,
+      aiScore: 78,
+      coords: { x: 42, y: 54 },
+    },
+    {
+      id: "gen-stop-2",
+      name: "Heritage Roadside Temple Complex",
+      category: "Spiritual" as const,
+      description: "Historic temple featuring beautiful regional stone craftsmanship and quiet prayer halls.",
+      image: "https://images.unsplash.com/photo-1608958416738-f9167df3c965?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 1.8,
+      recommendedVisitTime: "45 mins",
+      popularityScore: 90,
+      aiScore: 85,
+      coords: { x: 55, y: 56 },
+    },
+    {
+      id: "gen-stop-3",
+      name: "Highway Star Plaza & Dhaba",
+      category: "Food" as const,
+      description: "Comfortable highway dining complex serving regional specialties and hot tea.",
+      image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&q=80&w=400",
+      distanceFromRoute: 0.1,
+      recommendedVisitTime: "30 mins",
+      popularityScore: 86,
+      aiScore: 82,
+      coords: { x: 68, y: 52 },
+    },
+  ];
+};
+
 export const useTripStore = create<TripState>((set, get) => ({
-  trips: [mockTokyoTrip, mockParisTrip],
-  activeTrip: mockTokyoTrip,
+  trips: [mockIndiaTrip, mockTokyoTrip, mockParisTrip],
+  activeTrip: mockIndiaTrip,
   isGenerating: false,
   generationStep: 0,
   generationStatus: "",
@@ -446,9 +812,17 @@ export const useTripStore = create<TripState>((set, get) => ({
       };
     });
 
+    const source = params.source || "Bhimavaram";
+    const stopovers = generateMockStopovers(source, params.destination);
+
     const newTrip: Trip = {
       id: `${params.destination.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now()}`,
       destination: params.destination,
+      source: source,
+      mode: params.mode || "Bike",
+      language: params.language || "English",
+      attractionsPreferred: params.attractionsPreferred || "Temples",
+      stopovers: stopovers,
       startDate: params.startDate,
       endDate: params.endDate,
       daysCount,
@@ -543,5 +917,41 @@ export const useTripStore = create<TripState>((set, get) => ({
       generationStep: 0,
       generationStatus: "",
     });
+  },
+
+  reRankStopovers: (tripId, preference) => {
+    const trips = get().trips.map((trip) => {
+      if (trip.id !== tripId) return trip;
+      if (!trip.stopovers) return trip;
+
+      const updatedStopovers = trip.stopovers.map((stop) => {
+        let scoreBoost = 0;
+        const cat = stop.category.toLowerCase();
+        const pref = preference.toLowerCase();
+
+        if (pref === "temples" && cat === "spiritual") scoreBoost = 22;
+        else if (pref === "nature" && (cat === "nature" || cat === "viewpoint")) scoreBoost = 22;
+        else if (pref === "food" && cat === "food") scoreBoost = 22;
+        else if (pref === "adventure" && cat === "adventure") scoreBoost = 22;
+        else if (pref === "history" && cat === "heritage") scoreBoost = 22;
+        else if (pref === "photography" && cat === "instagram") scoreBoost = 22;
+
+        const newAiScore = Math.min(99, Math.max(42, Math.floor((stop.aiScore || 80) + scoreBoost - (scoreBoost === 0 ? 8 : 0))));
+
+        return {
+          ...stop,
+          aiScore: newAiScore,
+        };
+      });
+
+      return {
+        ...trip,
+        stopovers: updatedStopovers,
+        attractionsPreferred: preference,
+      };
+    });
+
+    const active = get().activeTrip?.id === tripId ? trips.find((t) => t.id === tripId) || null : get().activeTrip;
+    set({ trips, activeTrip: active });
   },
 }));
