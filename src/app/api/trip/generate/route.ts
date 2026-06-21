@@ -233,22 +233,76 @@ export async function POST(req: Request) {
 
     console.log(`Generating live trip: From ${source} to ${destination} via ${mode}`);
 
+    // Fallback coordinates dictionary for common Indian cities to ensure robust off-line/rate-limited operation
+    const fallbackCoords: Record<string, { lat: number; lon: number }> = {
+      bhimavaram: { lat: 16.5449, lon: 81.5224 },
+      hyderabad: { lat: 17.3850, lon: 78.4867 },
+      tanuku: { lat: 16.7570, lon: 81.7056 },
+      vijayawada: { lat: 16.5062, lon: 80.6480 },
+      suryapet: { lat: 17.1500, lon: 79.6200 },
+      bhongir: { lat: 17.5100, lon: 78.8900 },
+      delhi: { lat: 28.6139, lon: 77.2090 },
+      newdelhi: { lat: 28.6139, lon: 77.2090 },
+      noida: { lat: 28.5355, lon: 77.3910 },
+      gurgaon: { lat: 28.4595, lon: 77.0266 },
+      agra: { lat: 27.1767, lon: 78.0081 },
+      mumbai: { lat: 19.0760, lon: 72.8777 },
+      bangalore: { lat: 12.9716, lon: 77.5946 },
+      bengaluru: { lat: 12.9716, lon: 77.5946 },
+      chennai: { lat: 13.0827, lon: 80.2707 },
+      kolkata: { lat: 22.5726, lon: 88.3639 },
+      visakhapatnam: { lat: 17.6868, lon: 83.2185 },
+      vizag: { lat: 17.6868, lon: 83.2185 },
+      tirupati: { lat: 13.6288, lon: 79.4192 },
+      eluru: { lat: 16.7107, lon: 81.1035 },
+      guntur: { lat: 16.3067, lon: 80.4365 },
+      nellore: { lat: 14.4426, lon: 79.9864 },
+      rajahmundry: { lat: 17.0005, lon: 81.7835 },
+      kakinada: { lat: 16.9891, lon: 82.2475 },
+    };
+
+    const getFallbackCoords = (query: string) => {
+      const q = query.toLowerCase().replace(/[^a-z]/g, "");
+      for (const [city, coords] of Object.entries(fallbackCoords)) {
+        if (q.includes(city) || city.includes(q)) {
+          return coords;
+        }
+      }
+      return null;
+    };
+
+    const sanitizeQuery = (q: string) => {
+      const trimmed = q.trim();
+      if (!trimmed.toLowerCase().includes("india")) {
+        return `${trimmed}, India`;
+      }
+      return trimmed;
+    };
+
     // 1. Geocoding coordinates using Nominatim
     let sourceCoords: { lat: number; lon: number } | null = null;
     let destCoords: { lat: number; lon: number } | null = null;
 
+    const sourceClean = sanitizeQuery(source);
+    const destClean = sanitizeQuery(destination);
+
     try {
       const sourceUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        source + ", India"
+        sourceClean
       )}&format=json&limit=1`;
       const destUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        destination + ", India"
+        destClean
       )}&format=json&limit=1`;
 
+      console.log(`Requesting geocodes: Source URL="${sourceUrl}", Destination URL="${destUrl}"`);
+
       const [sourceRes, destRes] = await Promise.all([
-        fetchJson<any[]>(sourceUrl),
-        fetchJson<any[]>(destUrl),
+        fetchJson<any[]>(sourceUrl).catch(() => null),
+        fetchJson<any[]>(destUrl).catch(() => null),
       ]);
+
+      console.log("Geocoding response for source:", sourceRes);
+      console.log("Geocoding response for destination:", destRes);
 
       if (sourceRes && sourceRes.length > 0) {
         sourceCoords = { lat: parseFloat(sourceRes[0].lat), lon: parseFloat(sourceRes[0].lon) };
@@ -257,13 +311,26 @@ export async function POST(req: Request) {
         destCoords = { lat: parseFloat(destRes[0].lat), lon: parseFloat(destRes[0].lon) };
       }
     } catch (err) {
-      console.error("Nominatim Geocoding API failed:", err);
+      console.error("Nominatim Geocoding API execution failed:", err);
+    }
+
+    // Try fallback dictionary lookup if external Nominatim API did not resolve coordinates
+    if (!sourceCoords) {
+      sourceCoords = getFallbackCoords(source);
+      console.log(`Source Nominatim failed/empty. Fallback dictionary matched:`, sourceCoords);
+    }
+    if (!destCoords) {
+      destCoords = getFallbackCoords(destination);
+      console.log(`Destination Nominatim failed/empty. Fallback dictionary matched:`, destCoords);
     }
 
     // Fail gracefully if geocoding fails
     if (!sourceCoords || !destCoords) {
+      const failedLocations = [];
+      if (!sourceCoords) failedLocations.push(source);
+      if (!destCoords) failedLocations.push(destination);
       return NextResponse.json(
-        { error: "Live data currently unavailable. Geocoding resolved empty results." },
+        { error: `Live data currently unavailable. Geocoding resolved empty results for: ${failedLocations.join(", ")}` },
         { status: 503 }
       );
     }
