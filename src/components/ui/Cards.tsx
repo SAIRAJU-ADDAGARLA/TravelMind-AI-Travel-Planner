@@ -159,7 +159,9 @@ export function ItineraryCard({ trip, onDelete }: ItineraryCardProps) {
 
       <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-auto">
         <span className="text-xs text-muted-foreground">
-          Estimated: <strong className="text-foreground font-semibold">${Object.values(trip.costs).reduce((a, b) => a + b, 0)}</strong>
+          Estimated: <strong className="text-foreground font-semibold">
+            {trip.destination.toLowerCase().includes("india") ? "₹" : "$"}{Object.values(trip.costs).reduce((a, b) => a + b, 0)}
+          </strong>
         </span>
         <Link
           href={`/dashboard/itinerary/${trip.id}`}
@@ -175,9 +177,10 @@ export function ItineraryCard({ trip, onDelete }: ItineraryCardProps) {
 // 4. BUDGET CARD (Cost Breakdown visualizer)
 interface BudgetCardProps {
   costs: CostBreakdown;
+  currencySymbol?: string;
 }
 
-export function BudgetCard({ costs }: BudgetCardProps) {
+export function BudgetCard({ costs, currencySymbol = "$" }: BudgetCardProps) {
   const total = Object.values(costs).reduce((a, b) => a + b, 0);
 
   const categories = [
@@ -191,7 +194,7 @@ export function BudgetCard({ costs }: BudgetCardProps) {
     <div className="rounded-2xl border border-border/40 bg-card p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-bold text-foreground">Estimated Expenses</h3>
-        <span className="text-lg font-black text-primary">${total}</span>
+        <span className="text-lg font-black text-primary">{currencySymbol}{total}</span>
       </div>
 
       {/* Aggregate Bar */}
@@ -213,7 +216,7 @@ export function BudgetCard({ costs }: BudgetCardProps) {
               key={cat.name}
               style={{ width: `${pct}%` }}
               className={`${colorStyles[idx] || "bg-gray-400"} h-full`}
-              title={`${cat.name}: $${cat.amount} (${pct.toFixed(0)}%)`}
+              title={`${cat.name}: ${currencySymbol}${cat.amount} (${pct.toFixed(0)}%)`}
             />
           );
         })}
@@ -249,7 +252,7 @@ export function BudgetCard({ costs }: BudgetCardProps) {
                   <p className="text-xs text-muted-foreground">{pct.toFixed(0)}% of budget</p>
                 </div>
               </div>
-              <span className="font-bold text-foreground">${cat.amount}</span>
+              <span className="font-bold text-foreground">{currencySymbol}{cat.amount}</span>
             </div>
           );
         })}

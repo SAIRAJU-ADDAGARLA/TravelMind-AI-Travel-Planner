@@ -97,13 +97,28 @@ export default function JourneyTimeline({ source, destination, mode, stopovers }
                   <div className="absolute bottom-2.5 left-2.5 flex items-center space-x-1 rounded-lg bg-black/60 px-2 py-0.5 text-[9px] font-bold text-white backdrop-blur-md">
                     <span>{stop.category}</span>
                   </div>
+                  {stop.imageAttribution && stop.imageSourceUrl && (
+                    <a
+                      href={stop.imageSourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute bottom-2.5 right-2.5 text-[8px] bg-black/80 px-1.5 py-0.5 rounded-md text-white/95 hover:text-white opacity-70 hover:opacity-100 transition-opacity z-20"
+                    >
+                      Photo: {stop.imageAttribution}
+                    </a>
+                  )}
                 </div>
 
                 {/* Info Text */}
                 <div className="md:col-span-2 flex flex-col justify-between space-y-3">
                   <div className="space-y-1">
-                    <h5 className="text-sm font-extrabold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
+                    <h5 className="text-sm font-extrabold text-foreground group-hover:text-primary transition-colors flex items-center justify-between gap-1.5 flex-wrap">
                       <span>{stop.name}</span>
+                      {stop.coords && stop.coords.lat !== undefined && stop.coords.lon !== undefined && (
+                        <span className="text-[10px] text-muted-foreground font-normal tracking-wide bg-muted/60 px-2 py-0.5 rounded-md">
+                          📍 {stop.coords.lat.toFixed(4)}° N, {stop.coords.lon.toFixed(4)}° E
+                        </span>
+                      )}
                     </h5>
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       {stop.description}
@@ -112,20 +127,24 @@ export default function JourneyTimeline({ source, destination, mode, stopovers }
 
                   {/* Metadata Bar */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-border/40 text-[10px] text-muted-foreground font-semibold">
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="h-3.5 w-3.5 text-primary" />
-                      <span>{stop.distanceFromRoute} km off-route</span>
+                    <div className="flex items-center space-x-1" title="Highway Distance and Detour Estimate">
+                      <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="truncate">
+                        {stop.distanceFromRoute} km (~{Math.max(5, Math.round(stop.distanceFromRoute * 2.2))}m detour)
+                      </span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="h-3.5 w-3.5 text-purple-500" />
-                      <span>{stop.recommendedVisitTime} stay</span>
+                    <div className="flex items-center space-x-1" title="Recommended Stay Duration">
+                      <Clock className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                      <span className="truncate">{stop.recommendedVisitTime} stay</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-                      <span>{stop.popularityScore}% Popular</span>
+                    <div className="flex items-center space-x-1 font-bold text-foreground" title="Live Weather Forecast">
+                      <span className="text-xs shrink-0">⛅</span>
+                      <span className="truncate">
+                        {stop.temp !== undefined ? `${stop.temp}°C • ${stop.weatherText || "Live"}` : "Weather unavailable."}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-1 bg-primary/5 text-primary border border-primary/10 rounded-md px-1 py-0.5 justify-center font-bold">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
                       <span>{stop.aiScore}% Match</span>
                     </div>
                   </div>

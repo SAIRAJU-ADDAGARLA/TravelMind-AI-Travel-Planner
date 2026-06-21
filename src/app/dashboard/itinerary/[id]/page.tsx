@@ -79,6 +79,8 @@ export default function ItineraryViewerPage({
   };
 
   const activeDayItinerary = trip.itinerary.find((d) => d.day === activeDay) || trip.itinerary[0];
+  const isIndia = trip.destination.toLowerCase().includes("india") || !!(trip.source && trip.source.toLowerCase().includes("india"));
+  const currencySymbol = isIndia ? "₹" : "$";
 
   const weatherIcons = {
     sunny: Sun,
@@ -200,6 +202,9 @@ export default function ItineraryViewerPage({
             destination={trip.destination}
             stopovers={trip.stopovers || []}
             activePreference={trip.attractionsPreferred}
+            sourceCoords={trip.sourceCoords}
+            destinationCoords={trip.destinationCoords}
+            routeGeometry={trip.routeGeometry}
           />
           
           {/* Smart Stop Suggestions Prompt Card */}
@@ -316,7 +321,7 @@ export default function ItineraryViewerPage({
                 <div className="p-4 rounded-2xl border border-border/40 bg-card space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-amber-500 uppercase">09:00 AM • Morning Activity</span>
-                    <span className="text-xs text-muted-foreground font-semibold">Cost: ${activeDayItinerary.morning.cost}</span>
+                    <span className="text-xs text-muted-foreground font-semibold">Cost: {currencySymbol}{activeDayItinerary.morning.cost}</span>
                   </div>
                   <h4 className="text-sm font-bold text-foreground">{activeDayItinerary.morning.title}</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">{activeDayItinerary.morning.description}</p>
@@ -333,7 +338,7 @@ export default function ItineraryViewerPage({
                 <div className="p-4 rounded-2xl border border-border/40 bg-card space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-primary uppercase">01:30 PM • Afternoon Sights</span>
-                    <span className="text-xs text-muted-foreground font-semibold">Cost: ${activeDayItinerary.afternoon.cost}</span>
+                    <span className="text-xs text-muted-foreground font-semibold">Cost: {currencySymbol}{activeDayItinerary.afternoon.cost}</span>
                   </div>
                   <h4 className="text-sm font-bold text-foreground">{activeDayItinerary.afternoon.title}</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">{activeDayItinerary.afternoon.description}</p>
@@ -350,7 +355,7 @@ export default function ItineraryViewerPage({
                 <div className="p-4 rounded-2xl border border-border/40 bg-card space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-rose-500 uppercase">06:00 PM • Dinner Experience</span>
-                    <span className="text-xs text-muted-foreground font-semibold">Cost: ${activeDayItinerary.evening.cost}</span>
+                    <span className="text-xs text-muted-foreground font-semibold">Cost: {currencySymbol}{activeDayItinerary.evening.cost}</span>
                   </div>
                   <h4 className="text-sm font-bold text-foreground">{activeDayItinerary.evening.title}</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">{activeDayItinerary.evening.description}</p>
@@ -367,7 +372,7 @@ export default function ItineraryViewerPage({
                 <div className="p-4 rounded-2xl border border-border/40 bg-card space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-indigo-500 uppercase">09:00 PM • Night Leisure</span>
-                    <span className="text-xs text-muted-foreground font-semibold">Cost: ${activeDayItinerary.night.cost}</span>
+                    <span className="text-xs text-muted-foreground font-semibold">Cost: {currencySymbol}{activeDayItinerary.night.cost}</span>
                   </div>
                   <h4 className="text-sm font-bold text-foreground">{activeDayItinerary.night.title}</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">{activeDayItinerary.night.description}</p>
@@ -404,7 +409,7 @@ export default function ItineraryViewerPage({
           </div>
 
           {/* Budget visualizer card */}
-          <BudgetCard costs={trip.costs} />
+          <BudgetCard costs={trip.costs} currencySymbol={currencySymbol} />
 
           {/* Accommodation Recs */}
           <div className="p-6 rounded-3xl border border-border/40 bg-card space-y-4">
@@ -425,7 +430,7 @@ export default function ItineraryViewerPage({
                         {h.rating}
                       </span>
                       <span>•</span>
-                      <span className="font-semibold text-foreground">${h.pricePerNight}/night</span>
+                      <span className="font-semibold text-foreground">{currencySymbol}{h.pricePerNight}/night</span>
                     </div>
                   </div>
                 </div>
@@ -471,7 +476,7 @@ export default function ItineraryViewerPage({
                     <span className="font-bold uppercase text-[10px] text-primary">{t.type}</span>
                     <span className="text-muted-foreground">{t.description}</span>
                   </div>
-                  <span className="font-bold text-foreground">${t.cost}</span>
+                  <span className="font-bold text-foreground">{currencySymbol}{t.cost}</span>
                 </div>
               ))}
             </div>

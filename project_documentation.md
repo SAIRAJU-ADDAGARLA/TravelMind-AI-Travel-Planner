@@ -1,6 +1,9 @@
-# TravelMind AI - System Documentation
+# TravelMind AI (India Edition) - System Documentation
 
-Welcome to the official technical documentation for the **TravelMind AI** platform. This document serves as a comprehensive reference guide for developers, product designers, and frontend engineers looking to understand, maintain, or scale the application.
+Welcome to the official technical documentation for the **TravelMind AI (India Edition)** platform. This document serves as a comprehensive reference guide for developers, product designers, and frontend engineers looking to understand, maintain, or scale the application.
+
+## 🌟 Primary Product Message
+> "India's First AI Travel Platform That Discovers The Journey, Not Just The Destination."
 
 ---
 
@@ -12,14 +15,16 @@ The following diagram illustrates how user input propagates through our state en
 graph TD
     A[CreateTripForm /dashboard/create] -- 1. Submit Form Data --> B(useTripStore generateTrip)
     B -- 2. Trigger Async Simulated AI Pipeline --> C{AI Builder Loader}
-    C -- 3. Hydrate New Itinerary Object --> D[(Zustand Trip Registry)]
+    C -- 3. Hydrate New Itinerary & Stopovers --> D[(Zustand Trip Registry)]
     D -- 4. Redirect User --> E[Itinerary Viewer /dashboard/itinerary/id]
     E -- 5. Query Active Trip state --> D
-    F[AICopilotFloating Chat Widget] -- 6. Send Change Prompts --> G(useChatStore sendMessage)
-    G -- 7. Match Trigger Keywords --> H{Simulated Assistant Reply}
-    H -- 8. Update Trip timeline details --> D
-    I[ProfilePage Settings /dashboard/profile] -- 9. Edit defaults --> J(useAuthStore updatePreferences)
-    J -- 10. Update pre-fill forms --> A
+    F[Smart Stop Suggestions Card] -- 6. Select Preference Filter --> H(useTripStore reRankStopovers)
+    H -- 7. Recalculate AI Match Scores & Highlight Nodes --> D
+    G[AICopilotFloating Chat Widget] -- 8. Send Change Prompts --> I(useChatStore sendMessage)
+    I -- 9. Match Trigger Keywords --> J{Simulated Assistant Reply}
+    J -- 10. Update Trip timeline details --> D
+    K[ProfilePage Settings /dashboard/profile] -- 11. Edit defaults --> L(useAuthStore updatePreferences)
+    L -- 12. Update pre-fill forms --> A
 ```
 
 ---
@@ -46,9 +51,6 @@ The codebase utilizes a modular, highly scalable folder architecture:
 
 ```text
 TRAVELING APP/
-├── .next/                         # Compiled Next.js production builds
-├── node_modules/                  # Package dependencies
-├── public/                        # Static assets (images, favicon)
 ├── src/
 │   ├── app/                       # App Router routing directories
 │   │   ├── (auth)/                # Authentication grouping
@@ -56,9 +58,9 @@ TRAVELING APP/
 │   │   │   ├── login/             # Sign in screen
 │   │   │   └── register/          # Sign up screen
 │   │   ├── dashboard/             # Dashboard root layout & folders
-│   │   │   ├── create/            # Multi-step trip planner wizard
+│   │   │   ├── create/            # Multi-step trip planner wizard (India-tailored)
 │   │   │   ├── itinerary/         # Dynamic day timeline viewers
-│   │   │   │   └── [id]/          # Dynamic itinerary detail views
+│   │   │   │   └── [id]/          # Route mapping & flagship journey views
 │   │   │   ├── profile/           # User preference settings & stats
 │   │   │   ├── layout.tsx         # Sidebar, Copilot, & Mobile Nav layout
 │   │   │   └── page.tsx           # Dashboard home overview widgets
@@ -74,13 +76,14 @@ TRAVELING APP/
 │   │   │   ├── MobileNav.tsx
 │   │   │   └── Navbar.tsx
 │   │   └── ui/                    # Base visual elements
-│   │       └── Cards.tsx          # Card systems (Feature, Destination, Budget)
+│   │       ├── Cards.tsx          # Card systems (Feature, Destination, Budget)
+│   │       ├── India3DMap.tsx     # 3D tilted map canvas (glowing route & particle trails)
+│   │       └── JourneyTimeline.tsx # Vertical attraction step-by-step route timeline
 │   └── store/                     # Zustand state management engines
 │       ├── useAuthStore.ts        # User preferences & mock profile store
 │       ├── useChatStore.ts        # AI Copilot message thread histories
-│       └── useTripStore.ts        # Pre-seeded itineraries & AI generation
+│       └── useTripStore.ts        # Pre-seeded itineraries & India roadtrip database
 ├── package.json                   # Project scripts and dependencies
-├── tsconfig.json                  # TypeScript compiler settings
 ├── start.bat                      # Windows double-click startup shortcut
 └── tailwind.config.ts             # Tailwind configurations
 ```
@@ -126,75 +129,57 @@ Tracks the current mock logged-in user profile, travel statistics, and theme tog
   - `user`: User data object (Name, email, avatar, default preferences).
   - `isAuthenticated`: Boolean checks.
   - `theme`: `"light" | "dark"`.
-- **Actions**:
-  - `login(email, name)`: Simulates login and sets default credentials.
-  - `register(email, name)`: Creates a new user entry.
-  - `toggleTheme()`: Swaps light/dark presets and applies `.dark` classes to the document element.
-  - `updatePreferences(prefs)`: Overwrites interest tags and travel styles.
 
-### 2. `useTripStore`
-Manages saved trips, active itinerary details, and compiles new travel timelines.
+### 2. `useTripStore` (Journey Discovery Engine™ Upgrades)
+Manages saved trips, active itinerary details, and compiles new travel timelines along routes.
 - **State Properties**:
-  - `trips`: Array registry of all created itineraries (preseeded with Tokyo & Paris).
+  - `trips`: Array registry of all created itineraries (preseeded with Tokyo, Paris, and the **Bhimavaram to Hyderabad Bike Roadtrip**).
   - `activeTrip`: Trip object currently in focus.
   - `isGenerating`: Indicates active AI background processing.
-  - `generationStep`: Numeric value tracking progress bar percentages (0 to 100).
-  - `generationStatus`: String updates (e.g., "Structuring final timeline...").
+- **Stopover Attributes**:
+  - `name`: Spot name.
+  - `category`: Spiritual, Food, Heritage, Nature, Viewpoint, Adventure, or Instagram.
+  - `description`: Travel spot metadata.
+  - `distanceFromRoute`: in km off the main highway line.
+  - `recommendedVisitTime`: Suggested visit duration.
+  - `aiScore`: Calculated matching scores dynamically prioritized by preferences.
 - **Actions**:
-  - `setActiveTrip(id)`: Changes the viewer target itinerary.
-  - `deleteTrip(id)`: Removes a trip log.
-  - `generateTrip(params)`: Triggers sequential intervals simulating web crawling, map routing, weather forecasts, and dining pins.
+  - `generateTrip(params)`: Compiles the source city, transport mode (Bike, Car, Train, Flight), regional language, and route stopover lists.
+  - `reRankStopovers(tripId, preference)`: Recalculates attraction match percentages on filters change and pulses the relevant nodes on the 3D map canvas.
 
 ### 3. `useChatStore`
 Handles the Travel Copilot message logs and simulates context-driven responses.
-- **State Properties**:
-  - `messages`: Thread array of dialogue bubbles.
-  - `isOpen`: Chat container collapsible state.
-  - `isTyping`: Renders active jumping dots.
-- **Actions**:
-  - `sendMessage(text)`: Adds user text and schedules automated keyword response tasks (e.g., matching "cheaper" to reduce lodging prices).
 
 ---
 
 ## 🖥️ Page Specifications
 
 ### 1. Landing Page (`/`)
-An interactive marketing page.
-- **Hero Banner**: Animated with Framer Motion; features a dynamic subtitle, a "Start Planning" primary CTA, and a "Watch Demo" overlay modal.
-- **Features Section**: Incorporates 3D-hover `FeatureCard` structures highlighting map routing, weather bails, and budget constraints.
-- **Timeline Stepper**: A step-by-step visualizer outlining the creation sequence.
-- **Pricing Plans**: Side-by-side matrices outlining Free (Explorer) vs. $12/mo (Globetrotter) options.
+An interactive marketing page with hero sections, feature grids, pricing, and the **POTHU RAJU** signature footer.
 
 ### 2. Authentication Portal (`/login`, `/register`, `/forgot-password`)
 Minimal, card-based entry pages utilizing schema validators.
-- **React Hook Form**: Enforces client-side validation rules (e.g., password length, valid email structure).
-- **Social Login Mockup**: Google OAuth button redirects user to the dashboard after a short delay.
-- **Reset State transitions**: Transition states display confirmation messages upon form submission.
 
 ### 3. User Dashboard Overview (`/dashboard`)
 Serves as the main control center for users.
-- **Metrics Bar**: Displays cards tracking Total Trips, Upcoming Trips, Saved Locations, and AI Recommendation scores.
-- **Itinerary Registry**: Feeds created/saved travel cards; handles details linking and trip deletion triggers.
-- **AI Recommendation panel**: Curated destination chips that launch pre-filled wizards upon clicking.
 
 ### 4. Create Trip Wizard (`/dashboard/create`)
-A multi-step questionnaire wrapped inside a React Suspense container to ensure clean static page generation.
+A multi-step questionnaire wrapped inside a React Suspense container.
 - **Wizard Steps**:
-  1. *Destination*: Autocomplete input (requires at least 2 characters).
-  2. *Travel Dates*: Start/End date selectors.
-  3. *Budget*: Selectors for Budget, Mid-range, and Luxury tiers.
-  4. *Travel Style*: Selection grid including Adventure, Luxury, Family, Solo, and Backpacking.
-  5. *Interests*: Chip-select lists (Beaches, Food, History, Photography, Trekking).
-- **AI Generation Screen**: Overlays a glass panel with progress bars showing active compiling stages.
+  1. *Route*: Collects Starting City (Source) and Destination City.
+  2. *Intelligence & Mode*: Collects regional language switcher (Hindi, Telugu, English, etc.) and transport mode.
+  3. *Dates & Budget*: Start/End date selectors and budget tier.
+  4. *Smart Preferences*: AI stop highlights priority (Temples 🛕, Food 🍛, Nature 🌿, Adventure 🏍️, History 🏰, Photography 📸).
+  5. *Interests*: Chip lists including Spiritual Tourism, Food Discovery, and Heritage Routes.
 
 ### 5. Itinerary Details Viewer (`/dashboard/itinerary/[id]`)
 Synthesizes generated itineraries into a comprehensive review layout.
-- **Timeline tabs**: Switches views day by day.
-- **Daily Schedule**: Displays vertical timecards detailing morning, afternoon, evening, and night activities.
-- **Widgets Panel**:
-  - *Weather forecast*: Displays local temperatures and conditions.
-  - *Cost Breakdown*: Visualizes accommodation, dining, activities, and transit costs via `BudgetCard` charts.
-  - *Suggestions*: Interactive cards highlighting hotel pins, dining, and transit options.
+- **Journey Between Destinations (Flagship Section)**:
+  - **India3DMap**: Interactive canvas map displaying an isometric 3D-like layout of India with glowing particle trails along the route path, and pulsing dots.
+  - **AI Smart Stop Suggestions**: Card selector allowing travelers to re-rank the highway attractions list.
+  - **JourneyTimeline**: A vertical timeline mapping out all stops, Unsplash photography, off-route distances, suggested stay durations, and match scores.
+- **Day-by-Day Timeline**: Standard daily schedules (Morning, Afternoon, Evening, Night).
+- **Widgets Panel**: Weather forecast, `BudgetCard` cost charts, hotel listings, dining spots, and transit suggestions.
 
 ---
 

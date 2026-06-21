@@ -56,17 +56,24 @@ export interface Stopover {
   category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram";
   description: string;
   image: string;
+  imageAttribution?: string;
+  imageSourceUrl?: string;
   distanceFromRoute: number;
   recommendedVisitTime: string;
   popularityScore: number;
   aiScore: number;
-  coords: { x: number; y: number };
+  coords: { x: number; y: number; lat?: number; lon?: number };
+  weatherText?: string;
+  temp?: number;
 }
 
 export interface Trip {
   id: string;
   destination: string;
   source?: string;
+  sourceCoords?: { lat: number; lon: number };
+  destinationCoords?: { lat: number; lon: number };
+  routeGeometry?: [number, number][];
   mode?: "Bike" | "Car" | "Train" | "Flight" | "Bus";
   language?: string;
   attractionsPreferred?: string;
@@ -731,151 +738,58 @@ export const useTripStore = create<TripState>((set, get) => ({
   },
 
   generateTrip: async (params) => {
-    set({ isGenerating: true, generationStep: 0, generationStatus: "Initializing TravelMind AI engine..." });
+    set({ isGenerating: true, generationStep: 5, generationStatus: "Initializing TravelMind AI engine..." });
 
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    await sleep(1000);
-    set({ generationStep: 20, generationStatus: "Fetching historical weather patterns for " + params.destination + "..." });
-    await sleep(1000);
-    set({ generationStep: 40, generationStatus: "Curating sights based on style: " + params.travelStyle + "..." });
-    await sleep(1200);
-    set({ generationStep: 60, generationStatus: "Matching dining options with interests: " + params.interests.join(", ") + "..." });
-    await sleep(1000);
-    set({ generationStep: 80, generationStatus: "Optimizing geographic pathing and transport logistics..." });
-    await sleep(1000);
-    set({ generationStep: 95, generationStatus: "Structuring final timeline and pricing charts..." });
-    await sleep(800);
-
-    const start = new Date(params.startDate);
-    const end = new Date(params.endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const daysCount = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-
-    const baseCostMultiplier = params.budget === "Luxury" ? 500 : params.budget === "Mid-range" ? 200 : 80;
-    const costs: CostBreakdown = {
-      hotels: baseCostMultiplier * daysCount * 1.5,
-      food: baseCostMultiplier * daysCount * 0.7,
-      activities: baseCostMultiplier * daysCount * 0.5,
-      transport: baseCostMultiplier * daysCount * 0.3,
-    };
-
-    // Generate dynamic itinerary items based on interests and destination
-    const weatherConditions: ("sunny" | "cloudy" | "rainy")[] = ["sunny", "cloudy", "rainy"];
-    const weather = Array.from({ length: Math.min(daysCount + 1, 4) }, (_, i) => {
-      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const dayIndex = (start.getDay() + i) % 7;
-      return {
-        day: days[dayIndex],
-        temp: Math.floor(Math.random() * 10) + 15,
-        condition: weatherConditions[Math.floor(Math.random() * weatherConditions.length)] as any,
-      };
-    });
-
-    const itinerary: DayItinerary[] = Array.from({ length: daysCount }, (_, idx) => {
-      const dayNum = idx + 1;
-      const curDate = new Date(start);
-      curDate.setDate(start.getDate() + idx);
-      const dateStr = curDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-      return {
-        day: dayNum,
-        date: dateStr,
-        morning: {
-          title: `Explore historical highlights of ${params.destination}`,
-          description: `Enjoy a peaceful morning walk focusing on the unique culture. Capture photography during the golden hour.`,
-          time: "09:00 AM",
-          cost: Math.floor(baseCostMultiplier * 0.2),
-          location: "Downtown",
+    try {
+      await sleep(400);
+      set({ generationStep: 20, generationStatus: "Geocoding source & destination..." });
+      
+      const responsePromise = fetch("/api/trip/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        afternoon: {
-          title: `Curated ${params.travelStyle} experience`,
-          description: `Participate in top rated local activities highlighting the ${params.interests[0] || "scenery"} and local atmosphere.`,
-          time: "01:30 PM",
-          cost: Math.floor(baseCostMultiplier * 0.4),
-          location: "Cultural Quarter",
-        },
-        evening: {
-          title: `Gourmet dining and leisure walk`,
-          description: `Dine at a highly recommended culinary spot serving authentic cuisine. Walk through vibrant evening streets.`,
-          time: "06:00 PM",
-          cost: Math.floor(baseCostMultiplier * 0.3),
-          location: "Waterfront District",
-        },
-        night: {
-          title: `Local night market / Skyline observatory`,
-          description: `Conclude the day enjoying panoramic night views and sipping craft signature beverages from local mixologists.`,
-          time: "09:00 PM",
-          cost: Math.floor(baseCostMultiplier * 0.2),
-          location: "Skyline District",
-        },
-      };
-    });
+        body: JSON.stringify(params),
+      });
 
-    const source = params.source || "Bhimavaram";
-    const stopovers = generateMockStopovers(source, params.destination);
+      await sleep(800);
+      set({ generationStep: 45, generationStatus: "Calculating actual route via OSRM..." });
+      await sleep(800);
+      set({ generationStep: 70, generationStatus: "Discovering real attractions via Overpass API..." });
+      await sleep(800);
+      set({ generationStep: 90, generationStatus: "Fetching live weather and Wikipedia photographs..." });
 
-    const newTrip: Trip = {
-      id: `${params.destination.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now()}`,
-      destination: params.destination,
-      source: source,
-      mode: params.mode || "Bike",
-      language: params.language || "English",
-      attractionsPreferred: params.attractionsPreferred || "Temples",
-      stopovers: stopovers,
-      startDate: params.startDate,
-      endDate: params.endDate,
-      daysCount,
-      budget: params.budget,
-      travelStyle: params.travelStyle,
-      interests: params.interests,
-      itinerary,
-      weather,
-      costs,
-      hotels: [
-        {
-          name: `Grand Palace Oasis ${params.destination.split(",")[0]}`,
-          rating: 4.7,
-          pricePerNight: baseCostMultiplier * 1.2,
-          image: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=400",
-        },
-        {
-          name: `Boutique Urban Nest`,
-          rating: 4.4,
-          pricePerNight: baseCostMultiplier * 0.8,
-          image: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&q=80&w=400",
-        },
-      ],
-      restaurants: [
-        {
-          name: `The Kitchen Table`,
-          cuisine: `Local Signature Fusion`,
-          rating: 4.6,
-          priceLevel: params.budget === "Luxury" ? "$$$$" : params.budget === "Mid-range" ? "$$" : "$",
-        },
-        {
-          name: `Starlight Rooftop Eatery`,
-          cuisine: `Modern Cuisine & Bistro`,
-          rating: 4.5,
-          priceLevel: "$$$",
-        },
-      ],
-      transports: [
-        { type: "train", description: "City Metro Transit Pass", cost: 15 },
-        { type: "taxi", description: "Rideshare local transport", cost: 40 },
-      ],
-      createdAt: new Date().toISOString(),
-    };
+      const res = await responsePromise;
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Live data currently unavailable.");
+      }
 
-    set({
-      trips: [newTrip, ...get().trips],
-      activeTrip: newTrip,
-      isGenerating: false,
-      generationStep: 0,
-      generationStatus: "",
-    });
+      const newTrip: Trip = await res.json();
+      
+      set({ generationStep: 100, generationStatus: "Finalizing itinerary details..." });
+      await sleep(200);
 
-    return newTrip.id;
+      set({
+        trips: [newTrip, ...get().trips],
+        activeTrip: newTrip,
+        isGenerating: false,
+        generationStep: 0,
+        generationStatus: "",
+      });
+
+      return newTrip.id;
+    } catch (err: any) {
+      set({
+        isGenerating: false,
+        generationStep: 0,
+        generationStatus: "",
+      });
+      alert(err.message || "Live data currently unavailable.");
+      throw err;
+    }
   },
 
   regenerateTrip: async (id) => {

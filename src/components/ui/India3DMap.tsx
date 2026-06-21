@@ -9,18 +9,78 @@ interface India3DMapProps {
   destination: string;
   stopovers: Stopover[];
   activePreference?: string;
+  sourceCoords?: { lat: number; lon: number };
+  destinationCoords?: { lat: number; lon: number };
+  routeGeometry?: [number, number][];
 }
 
-export default function India3DMap({ source, destination, stopovers, activePreference }: India3DMapProps) {
+export default function India3DMap({
+  source,
+  destination,
+  stopovers,
+  activePreference,
+  sourceCoords,
+  destinationCoords,
+  routeGeometry,
+}: India3DMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
-  // Default coordinate path representing Bhimavaram to Hyderabad route on our map grid (x: 20-80%, y: 35-70%)
-  const routePoints: { name: string; x: number; y: number; isEdge: boolean; category?: string }[] = [
-    { name: source, x: 30, y: 60, isEdge: true },
-    ...stopovers.map((s) => ({ name: s.name, x: s.coords.x, y: s.coords.y, isEdge: false, category: s.category })),
-    { name: destination, x: 80, y: 48, isEdge: true },
-  ];
+  // Helper to dynamically project lat/lon coords to canvas percentage coordinates (20%-80%)
+  const hasRealCoords = !!(sourceCoords && destinationCoords);
+
+  const getCanvasPercentage = (lat: number, lon: number) => {
+    if (!hasRealCoords) return { x: 50, y: 50 };
+    const latitudes = [
+      sourceCoords!.lat,
+      destinationCoords!.lat,
+      ...stopovers.map((s) => s.coords.lat).filter((l): l is number => l !== undefined),
+    ];
+    const longitudes = [
+      sourceCoords!.lon,
+      destinationCoords!.lon,
+      ...stopovers.map((s) => s.coords.lon).filter((l): l is number => l !== undefined),
+    ];
+    const minLat = Math.min(...latitudes);
+    const maxLat = Math.max(...latitudes);
+    const minLon = Math.min(...longitudes);
+    const maxLon = Math.max(...longitudes);
+
+    const latRange = maxLat - minLat || 1;
+    const lonRange = maxLon - minLon || 1;
+
+    // Project coordinates onto a padded box in the center (20% to 80%)
+    const x = 20 + ((lon - minLon) / lonRange) * 60;
+    const y = 80 - ((lat - minLat) / latRange) * 60; // North is up, so invert Y
+    return { x, y };
+  };
+
+  const routePoints: { name: string; x: number; y: number; isEdge: boolean; category?: string }[] = [];
+  if (hasRealCoords) {
+    const startPct = getCanvasPercentage(sourceCoords!.lat, sourceCoords!.lon);
+    const endPct = getCanvasPercentage(destinationCoords!.lat, destinationCoords!.lon);
+    
+    routePoints.push({ name: source, x: startPct.x, y: startPct.y, isEdge: true });
+    stopovers.forEach((s) => {
+      if (s.coords.lat !== undefined && s.coords.lon !== undefined) {
+        const pct = getCanvasPercentage(s.coords.lat, s.coords.lon);
+        routePoints.push({ name: s.name, x: pct.x, y: pct.y, isEdge: false, category: s.category });
+      }
+    });
+    routePoints.push({ name: destination, x: endPct.x, y: endPct.y, isEdge: true });
+  } else {
+    // Static coordinate fallback
+    routePoints.push({ name: source, x: 30, y: 60, isEdge: true });
+    stopovers.forEach((s) => {
+      routePoints.push({ name: s.name, x: s.coords.x, y: s.coords.y, isEdge: false, category: s.category });
+    });
+    routePoints.push({ name: destination, x: 80, y: 48, isEdge: true });
+  }
+
+  // Get full polyline projected to canvas coordinates
+  const pathPoints = routeGeometry && hasRealCoords
+    ? routeGeometry.map(([lon, lat]) => getCanvasPercentage(lat, lon))
+    : [];
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -53,12 +113,11 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
       }
 
       // Draw abstract India shape (connecting vector coordinates for clean background representation)
-      ctx.fillStyle = "rgba(37, 99, 235, 0.015)";
-      ctx.strokeStyle = "rgba(37, 99, 235, 0.08)";
-      ctx.lineWidth = 2;
+      ctx.fillStyle = "rgba(37, 99, 235, 0.012)";
+      ctx.strokeStyle = "rgba(37, 99, 235, 0.06)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       
-      // Rough geometric boundaries of India map
       const w = canvas.width;
       const h = canvas.height;
       ctx.moveTo(w * 0.5, h * 0.1);   // Kashmir
@@ -79,7 +138,7 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
 
       // Draw Main Route Line
       ctx.beginPath();
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3.5;
       
       // Gradient matching primary -> accent colors
       const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
@@ -90,45 +149,77 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      routePoints.forEach((pt, idx) => {
-        const px = (pt.x / 100) * canvas.width;
-        const py = (pt.y / 100) * canvas.height;
-        if (idx === 0) {
-          ctx.moveTo(px, py);
-        } else {
-          ctx.lineTo(px, py);
-        }
-      });
+      if (pathPoints.length > 0) {
+        pathPoints.forEach((pt, idx) => {
+          const px = (pt.x / 100) * canvas.width;
+          const py = (pt.y / 100) * canvas.height;
+          if (idx === 0) {
+            ctx.moveTo(px, py);
+          } else {
+            ctx.lineTo(px, py);
+          }
+        });
+      } else {
+        routePoints.forEach((pt, idx) => {
+          const px = (pt.x / 100) * canvas.width;
+          const py = (pt.y / 100) * canvas.height;
+          if (idx === 0) {
+            ctx.moveTo(px, py);
+          } else {
+            ctx.lineTo(px, py);
+          }
+        });
+      }
       ctx.stroke();
 
       // Draw Animated Glowing Trail Particles along the route
-      particleOffset += 0.4;
+      particleOffset += 0.35;
       if (particleOffset >= 100) particleOffset = 0;
 
       ctx.save();
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
       ctx.shadowColor = "#06B6D4";
       ctx.fillStyle = "#ffffff";
       
-      // Draw glowing pulse particles
-      routePoints.forEach((pt, idx) => {
-        if (idx < routePoints.length - 1) {
-          const nextPt = routePoints[idx + 1];
-          const px = (pt.x / 100) * canvas.width;
-          const py = (pt.y / 100) * canvas.height;
-          const nx = (nextPt.x / 100) * canvas.width;
-          const ny = (nextPt.y / 100) * canvas.height;
+      if (pathPoints.length > 1) {
+        const progress = (particleOffset / 100) * (pathPoints.length - 1);
+        const idx = Math.floor(progress);
+        const nextIdx = Math.min(idx + 1, pathPoints.length - 1);
+        const ratio = progress - idx;
 
-          // Interpolated particle position
-          const travelPct = (particleOffset % 100) / 100;
-          const partX = px + (nx - px) * travelPct;
-          const partY = py + (ny - py) * travelPct;
+        const pt = pathPoints[idx];
+        const nextPt = pathPoints[nextIdx];
 
-          ctx.beginPath();
-          ctx.arc(partX, partY, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      });
+        const px = (pt.x / 100) * canvas.width;
+        const py = (pt.y / 100) * canvas.height;
+        const nx = (nextPt.x / 100) * canvas.width;
+        const ny = (nextPt.y / 100) * canvas.height;
+
+        const partX = px + (nx - px) * ratio;
+        const partY = py + (ny - py) * ratio;
+
+        ctx.beginPath();
+        ctx.arc(partX, partY, 4, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        routePoints.forEach((pt, idx) => {
+          if (idx < routePoints.length - 1) {
+            const nextPt = routePoints[idx + 1];
+            const px = (pt.x / 100) * canvas.width;
+            const py = (pt.y / 100) * canvas.height;
+            const nx = (nextPt.x / 100) * canvas.width;
+            const ny = (nextPt.y / 100) * canvas.height;
+
+            const travelPct = (particleOffset % 100) / 100;
+            const partX = px + (nx - px) * travelPct;
+            const partY = py + (ny - py) * travelPct;
+
+            ctx.beginPath();
+            ctx.arc(partX, partY, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+      }
       ctx.restore();
 
       // Draw Pulsing attraction nodes & labels
@@ -137,14 +228,11 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
         const py = (pt.y / 100) * canvas.height;
         
         const isHovered = hoveredNode === pt.name;
-        
-        // Highlight preferred category stops
         const isPreferred = pt.category && activePreference && pt.category.toLowerCase() === activePreference.toLowerCase();
         
         ctx.save();
         
         if (pt.isEdge) {
-          // Source & Destination nodes
           ctx.shadowBlur = 15;
           ctx.shadowColor = pt.name === source ? "#10B981" : "#2563EB";
           ctx.fillStyle = pt.name === source ? "#10B981" : "#2563EB";
@@ -153,7 +241,6 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
           ctx.arc(px, py, isHovered ? 8 : 6, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          // Intermediate stopover attraction nodes
           const pulseScale = 1 + 0.15 * Math.sin(Date.now() / 200);
           ctx.shadowBlur = isPreferred ? 15 : 6;
           ctx.shadowColor = isPreferred ? "#F59E0B" : "#8B5CF6";
@@ -163,7 +250,6 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
           ctx.arc(px, py, (isHovered ? 7 : 5) * (isPreferred ? pulseScale : 1), 0, Math.PI * 2);
           ctx.fill();
 
-          // Outer glowing ring
           ctx.strokeStyle = isPreferred ? "rgba(245, 158, 11, 0.4)" : "rgba(139, 92, 246, 0.3)";
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -171,21 +257,19 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
           ctx.stroke();
         }
 
-        // Draw names on hover or for start/ends
         if (isHovered || pt.isEdge || isPreferred) {
           ctx.shadowBlur = 0;
           ctx.fillStyle = "#ffffff";
           ctx.font = "bold 9px sans-serif";
           ctx.textAlign = "center";
           
-          // Draw text backdrop block
-          const textWidth = ctx.measureText(pt.name.split(" ")[0]).width;
+          const labelText = pt.name.split(" ")[0];
+          const textWidth = ctx.measureText(labelText).width;
           ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
           ctx.fillRect(px - textWidth/2 - 4, py - 18, textWidth + 8, 12);
           
-          // Draw text string
           ctx.fillStyle = isPreferred ? "#F59E0B" : "#ffffff";
-          ctx.fillText(pt.name.split(" ")[0], px, py - 9);
+          ctx.fillText(labelText, px, py - 9);
         }
 
         ctx.restore();
@@ -199,7 +283,7 @@ export default function India3DMap({ source, destination, stopovers, activePrefe
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [routePoints, source, destination, hoveredNode, activePreference]);
+  }, [routePoints, pathPoints, source, destination, hoveredNode, activePreference]);
 
   // Handle canvas mouse move hover triggers
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
