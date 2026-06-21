@@ -33,6 +33,7 @@ export default function JourneyTimeline({ source, destination, mode, stopovers }
       case "Viewpoint": return "🌄";
       case "Adventure": return "🏍️";
       case "Instagram": return "📸";
+      case "Beaches": return "🌊";
       default: return "📍";
     }
   };

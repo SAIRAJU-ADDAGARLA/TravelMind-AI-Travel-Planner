@@ -21,7 +21,7 @@ interface DayItinerary {
 interface Stopover {
   id: string;
   name: string;
-  category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram";
+  category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram" | "Beaches";
   description: string;
   image: string;
   imageAttribution?: string;
@@ -494,18 +494,21 @@ export async function POST(req: Request) {
       // Map categories
       let category: Stopover["category"] = "Nature";
       const tags = el.tags || {};
+      const nameLower = (tags.name || "").toLowerCase();
       
-      if (tags.religion || tags.amenity === "place_of_worship") {
+      if (tags.religion || tags.amenity === "place_of_worship" || nameLower.includes("temple") || nameLower.includes("church") || nameLower.includes("mosque") || nameLower.includes("masjid")) {
         category = "Spiritual";
-      } else if (tags.historic || tags.tourism === "museum") {
+      } else if (tags.historic || tags.tourism === "museum" || nameLower.includes("fort") || nameLower.includes("palace") || nameLower.includes("ruins") || nameLower.includes("monument")) {
         category = "Heritage";
-      } else if (tags.amenity === "restaurant" || tags.amenity === "cafe") {
+      } else if (tags.amenity === "restaurant" || tags.amenity === "cafe" || tags.amenity === "food_court" || nameLower.includes("dhaba") || nameLower.includes("hotel restaurant") || nameLower.includes("tiffin")) {
         category = "Food";
-      } else if (tags.natural === "beach" || tags.tourism === "beach_resort") {
-        category = "Nature";
-      } else if (tags.sport || tags.leisure === "adventure_park" || tags.tourism === "theme_park") {
+      } else if (tags.natural === "beach" || tags.tourism === "beach_resort" || nameLower.includes("beach")) {
+        category = "Beaches";
+      } else if (tags.sport || tags.leisure === "adventure_park" || tags.tourism === "theme_park" || nameLower.includes("adventure") || nameLower.includes("trek") || nameLower.includes("climb")) {
         category = "Adventure";
-      } else if (tags.tourism === "viewpoint") {
+      } else if (nameLower.includes("photo") || nameLower.includes("viewpoint") || nameLower.includes("sunset") || nameLower.includes("sunrise") || nameLower.includes("scenic") || nameLower.includes("instagram")) {
+        category = "Instagram";
+      } else if (tags.tourism === "viewpoint" || tags.tourism === "attraction") {
         category = "Viewpoint";
       }
 
@@ -520,6 +523,7 @@ export async function POST(req: Request) {
         Viewpoint: "30 mins",
         Nature: "1 hour",
         Instagram: "30 mins",
+        Beaches: "2 hours",
       };
 
       const recommendedVisitTime = visitTimes[category] || "45 mins";

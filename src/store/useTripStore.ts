@@ -53,7 +53,7 @@ export interface CostBreakdown {
 export interface Stopover {
   id: string;
   name: string;
-  category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram";
+  category: "Spiritual" | "Food" | "Heritage" | "Nature" | "Viewpoint" | "Adventure" | "Instagram" | "Beaches";
   description: string;
   image: string;
   imageAttribution?: string;
