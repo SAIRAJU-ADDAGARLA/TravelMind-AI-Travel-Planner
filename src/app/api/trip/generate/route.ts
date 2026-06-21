@@ -236,6 +236,8 @@ export async function POST(req: Request) {
     // Fallback coordinates dictionary for common Indian cities to ensure robust off-line/rate-limited operation
     const fallbackCoords: Record<string, { lat: number; lon: number }> = {
       bhimavaram: { lat: 16.5449, lon: 81.5224 },
+      jallikommara: { lat: 17.2008, lon: 81.1895 },
+      jallikommaraandhrapradesh: { lat: 17.2008, lon: 81.1895 },
       hyderabad: { lat: 17.3850, lon: 78.4867 },
       tanuku: { lat: 16.7570, lon: 81.7056 },
       vijayawada: { lat: 16.5062, lon: 80.6480 },
@@ -262,7 +264,7 @@ export async function POST(req: Request) {
     };
 
     const getFallbackCoords = (query: string) => {
-      const q = query.toLowerCase().replace(/[^a-z]/g, "");
+      const q = query.toLowerCase().replace(/\s/g, "").replace(/[^a-z]/g, "");
       for (const [city, coords] of Object.entries(fallbackCoords)) {
         if (q.includes(city) || city.includes(q)) {
           return coords;
@@ -279,50 +281,75 @@ export async function POST(req: Request) {
       return trimmed;
     };
 
-    // 1. Geocoding coordinates using Nominatim
-    let sourceCoords: { lat: number; lon: number } | null = null;
-    let destCoords: { lat: number; lon: number } | null = null;
-
-    const sourceClean = sanitizeQuery(source);
-    const destClean = sanitizeQuery(destination);
-
-    try {
-      const sourceUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        sourceClean
-      )}&format=json&limit=1`;
-      const destUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
-        destClean
-      )}&format=json&limit=1`;
-
-      console.log(`Requesting geocodes: Source URL="${sourceUrl}", Destination URL="${destUrl}"`);
-
-      const [sourceRes, destRes] = await Promise.all([
-        fetchJson<any[]>(sourceUrl).catch(() => null),
-        fetchJson<any[]>(destUrl).catch(() => null),
-      ]);
-
-      console.log("Geocoding response for source:", sourceRes);
-      console.log("Geocoding response for destination:", destRes);
-
-      if (sourceRes && sourceRes.length > 0) {
-        sourceCoords = { lat: parseFloat(sourceRes[0].lat), lon: parseFloat(sourceRes[0].lon) };
+    const geocodeLocation = async (loc: string): Promise<{ lat: number; lon: number } | null> => {
+      // 1. Check local fallback map
+      const cached = getFallbackCoords(loc);
+      if (cached) {
+        console.log(`Resolved "${loc}" via fallback dictionary match.`);
+        return cached;
       }
-      if (destRes && destRes.length > 0) {
-        destCoords = { lat: parseFloat(destRes[0].lat), lon: parseFloat(destRes[0].lon) };
-      }
-    } catch (err) {
-      console.error("Nominatim Geocoding API execution failed:", err);
-    }
 
-    // Try fallback dictionary lookup if external Nominatim API did not resolve coordinates
-    if (!sourceCoords) {
-      sourceCoords = getFallbackCoords(source);
-      console.log(`Source Nominatim failed/empty. Fallback dictionary matched:`, sourceCoords);
-    }
-    if (!destCoords) {
-      destCoords = getFallbackCoords(destination);
-      console.log(`Destination Nominatim failed/empty. Fallback dictionary matched:`, destCoords);
-    }
+      // 2. Query Nominatim (Clean - appending India)
+      try {
+        const clean = sanitizeQuery(loc);
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(clean)}&format=json&limit=1`;
+        const res = await fetchJson<any[]>(url);
+        if (res && res.length > 0) {
+          console.log(`Resolved "${loc}" via Nominatim (Clean):`, res[0]);
+          return { lat: parseFloat(res[0].lat), lon: parseFloat(res[0].lon) };
+        }
+      } catch (err) {
+        console.error(`Nominatim (Clean) query failed for "${loc}":`, err);
+      }
+
+      // 3. Query Nominatim (Raw - raw query string)
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(loc)}&format=json&limit=1`;
+        const res = await fetchJson<any[]>(url);
+        if (res && res.length > 0) {
+          console.log(`Resolved "${loc}" via Nominatim (Raw):`, res[0]);
+          return { lat: parseFloat(res[0].lat), lon: parseFloat(res[0].lon) };
+        }
+      } catch (err) {
+        console.error(`Nominatim (Raw) query failed for "${loc}":`, err);
+      }
+
+      // 4. Query Nominatim (Stripped - space removed)
+      if (loc.includes(" ")) {
+        try {
+          const stripped = loc.replace(/\s/g, "");
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(stripped)}&format=json&limit=1`;
+          const res = await fetchJson<any[]>(url);
+          if (res && res.length > 0) {
+            console.log(`Resolved "${loc}" via Nominatim (Stripped):`, res[0]);
+            return { lat: parseFloat(res[0].lat), lon: parseFloat(res[0].lon) };
+          }
+        } catch (err) {
+          console.error(`Nominatim (Stripped) query failed for "${loc}":`, err);
+        }
+      }
+
+      // 5. Query Nominatim (Word by word fallback search)
+      const words = loc.trim().split(/\s+/).filter((w) => w.length > 3);
+      for (const word of words) {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(word + ", India")}&format=json&limit=1`;
+          const res = await fetchJson<any[]>(url);
+          if (res && res.length > 0) {
+            console.log(`Resolved "${loc}" via word sub-query "${word}":`, res[0]);
+            return { lat: parseFloat(res[0].lat), lon: parseFloat(res[0].lon) };
+          }
+        } catch (err) {
+          console.error(`Nominatim (Word fallback) failed for "${word}":`, err);
+        }
+      }
+
+      return null;
+    };
+
+    // 1. Geocoding coordinates using multi-stage geocodeLocation
+    const sourceCoords = await geocodeLocation(source);
+    const destCoords = await geocodeLocation(destination);
 
     // Fail gracefully if geocoding fails
     if (!sourceCoords || !destCoords) {
